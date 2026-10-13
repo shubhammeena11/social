@@ -3,17 +3,19 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
-import { Home, Search, PlusSquare, Bell, Bookmark, User, LogOut, ShieldCheck } from 'lucide-react';
+import { Compass, Home, Search, PlusSquare, Bell, Bookmark, User, LogOut, ShieldCheck, Settings } from 'lucide-react';
 import { logoutUser } from '@/store/authSlice';
 import UserAvatar from './UserAvatar';
 
 const navItems = [
   { href: '/feed', label: 'Home', icon: Home },
-  { href: '/explore', label: 'Explore', icon: Search },
+  { href: '/explore', label: 'Explore', icon: Compass },
+  { href: '/search', label: 'Search', icon: Search },
   { href: '/create', label: 'Create', icon: PlusSquare },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/saved', label: 'Saved', icon: Bookmark },
   { href: '/requests', label: 'Requests', icon: ShieldCheck },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function Sidebar() {

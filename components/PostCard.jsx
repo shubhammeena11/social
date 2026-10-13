@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Heart, MessageCircle, Bookmark, Trash2, MoreHorizontal, Lock } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, MoreHorizontal, Lock } from 'lucide-react';
 import { api, extractApiData } from '@/lib/api/client';
 import UserAvatar from './UserAvatar';
 import PostMedia from './PostMedia';
+import ConfirmDialog from './ConfirmDialog';
 
 function formatRelativeDate(dateString) {
   if (!dateString) return 'just now';
@@ -30,6 +31,10 @@ export default function PostCard({ post, currentUser, onDeleted, onChanged }) {
   const [likeCount, setLikeCount] = useState(Math.max(0, Number(post?.likesCount) || 0));
   const [commentCount, setCommentCount] = useState(post?.commentsCount || 0);
   const [liking, setLiking] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const likeRequestInFlight = useRef(false);
 
   useEffect(() => {
@@ -85,19 +90,26 @@ export default function PostCard({ post, currentUser, onDeleted, onChanged }) {
 
   const handleDelete = async () => {
     if (!isOwner) return;
+    setDeleting(true);
+    setDeleteError('');
     try {
       await api.delete(`/api/posts/${post._id}`);
+      setConfirmingDelete(false);
       if (onDeleted) onDeleted(post._id);
     } catch (error) {
       console.error(error);
+      setDeleteError(error.message || 'Could not delete this post.');
+    } finally {
+      setDeleting(false);
     }
   };
 
   const privateBadge = author?.isPrivate ? <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700"><Lock size={10} /> Private</span> : null;
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between p-4">
+    <>
+    <article className="relative rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="relative flex items-center justify-between p-4">
         <Link href={author?.username ? `/profile/${author.username}` : '#'} className="flex items-center gap-3">
           <UserAvatar user={author} size="md" />
           <div>
@@ -110,14 +122,34 @@ export default function PostCard({ post, currentUser, onDeleted, onChanged }) {
         </Link>
 
         {isOwner ? (
-          <button onClick={handleDelete} className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-red-600">
-            <Trash2 size={16} />
-          </button>
-        ) : (
-          <button className="rounded-full p-2 text-slate-500 hover:bg-slate-100">
-            <MoreHorizontal size={16} />
-          </button>
-        )}
+          <>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="Post options"
+              aria-expanded={menuOpen}
+              title="Post options"
+              className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+            >
+              <MoreHorizontal size={18} />
+            </button>
+            {menuOpen ? (
+              <div className="absolute right-4 top-14 z-20 w-40 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setDeleteError('');
+                    setConfirmingDelete(true);
+                  }}
+                  className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50"
+                >
+                  Delete post
+                </button>
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </div>
 
       {post?.caption ? <p className="px-4 pb-3 text-sm leading-6 text-slate-700">{post.caption}</p> : null}
@@ -161,5 +193,16 @@ export default function PostCard({ post, currentUser, onDeleted, onChanged }) {
         </button>
       </div>
     </article>
+    {confirmingDelete ? (
+      <ConfirmDialog
+        title="Delete this post?"
+        description="This post and its associated comments will be removed. This action cannot be undone."
+        error={deleteError}
+        busy={deleting}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={handleDelete}
+      />
+    ) : null}
+    </>
   );
 }

@@ -4,7 +4,7 @@ import User from "@/models/User";
 import { requireUser, handleRouteError, validObjectId } from "@/lib/route-utils";
 import { postSchema } from "@/lib/validators";
 import { success, failure, validationFailure } from "@/lib/api-response";
-import { attachLikeState, getVisiblePost, isValidOwnedMedia } from "@/lib/social";
+import { attachLikeState, getVisiblePost, isAcceptedFollowerAudience, isValidOwnedMedia } from "@/lib/social";
 import cloudinary from "@/lib/cloudinary";
 
 export async function GET(request, { params }) {
@@ -41,16 +41,33 @@ export async function PATCH(request, { params }) {
       return failure("Not authorized to edit this post", 403);
     }
 
-    const parsed = postSchema.safeParse(await request.json());
+    const body = await request.json();
+    const parsed = postSchema.safeParse(body);
     if (!parsed.success) return validationFailure(parsed.error);
 
     if (!(await isValidOwnedMedia(auth.userId, parsed.data.media))) {
       return failure("Invalid or unowned media asset", 400);
     }
 
+    const visibility = Object.hasOwn(body, "visibility")
+      ? parsed.data.visibility
+      : post.visibility || "everyone";
+    const audience = visibility !== "custom"
+      ? []
+      : Object.hasOwn(body, "audience")
+        ? parsed.data.audience
+        : visibility === post.visibility
+          ? post.audience.map(String)
+          : [];
+    if (!(await isAcceptedFollowerAudience(auth.userId, audience))) {
+      return failure("Custom audience must contain only current followers", 400);
+    }
+
     post.caption = parsed.data.caption;
     post.media = parsed.data.media;
     post.commentsEnabled = parsed.data.commentsEnabled;
+    post.visibility = visibility;
+    post.audience = audience;
     await post.save();
 
     return success({ post });

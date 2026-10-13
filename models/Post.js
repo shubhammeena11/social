@@ -79,6 +79,17 @@ const postSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    visibility: {
+      type: String,
+      enum: ["everyone", "followers", "custom"],
+      default: "everyone",
+    },
+
+    audience: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
   },
   { timestamps: true }
 );
