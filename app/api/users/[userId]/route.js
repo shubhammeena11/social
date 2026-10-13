@@ -68,19 +68,23 @@ export async function GET(request, { params }) {
 
     const Follow = (await import("@/models/Follow")).default;
 
-    const isFollowing = viewerId
-      ? Boolean(
-          await Follow.exists({
+    const relationship = viewerId
+      ? await Follow.findOne({
             follower: viewerId,
             following: user._id,
-            status: "accepted",
-          })
-        )
-      : false;
+            isDeleted: { $ne: true },
+          }).select("status")
+      : null;
+    const isFollowing = relationship?.status === "accepted";
 
     return success({
       user,
       isFollowing,
+      relationship: isFollowing
+        ? "accepted"
+        : relationship?.status === "pending"
+          ? "pending"
+          : "not_following",
       canViewPosts,
     });
   } catch (error) {

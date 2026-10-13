@@ -23,6 +23,7 @@ export async function GET(request, { params }) {
         follower: auth.userId,
         following: userId,
         status: "accepted",
+        isDeleted: { $ne: true },
       });
 
       if (!allowed) return failure("This account is private", 403);
@@ -35,7 +36,11 @@ export async function GET(request, { params }) {
     if (!parsed.success) return validationFailure(parsed.error);
 
     const { page, limit } = parsed.data;
-    const filter = { following: userId, status: "accepted" };
+    const filter = {
+      following: userId,
+      status: "accepted",
+      isDeleted: { $ne: true },
+    };
 
     const [relationships, total] = await Promise.all([
       Follow.find(filter)

@@ -17,13 +17,27 @@ export async function POST(request, { params }) {
     const post = await getVisiblePost(postId, auth.userId);
     if (!post) return failure("Post not found", 404);
 
-    const result = await Like.updateOne(
-      { user: auth.userId, post: postId },
-      { $setOnInsert: { user: auth.userId, post: postId } },
-      { upsert: true }
-    );
+    const likeFilter = { user: auth.userId, post: postId };
+    const activateLike = {
+      $set: { isDeleted: false, deletedAt: null },
+      $setOnInsert: { user: auth.userId, post: postId },
+    };
+    let previous;
+    try {
+      previous = await Like.findOneAndUpdate(likeFilter, activateLike, {
+        upsert: true,
+        new: false,
+      });
+    } catch (error) {
+      if (error?.code !== 11000) throw error;
+      previous = await Like.findOneAndUpdate(likeFilter, activateLike, {
+        new: false,
+      });
+    }
 
-    if (result.upsertedCount) {
+    const transitionedToActive = !previous || previous.isDeleted === true;
+
+    if (transitionedToActive) {
       await Post.updateOne({ _id: postId }, { $inc: { likesCount: 1 } });
 
       await createNotification({
@@ -34,7 +48,12 @@ export async function POST(request, { params }) {
       });
     }
 
-    return success({ liked: true });
+    const likesCount = await Like.countDocuments({
+      post: postId,
+      isDeleted: { $ne: true },
+    });
+
+    return success({ liked: true, changed: transitionedToActive, likesCount });
   } catch (error) {
     return handleRouteError(error);
   }
@@ -48,19 +67,37 @@ export async function DELETE(request, { params }) {
     const { postId } = await params;
     if (!validObjectId(postId)) return failure("Invalid post ID", 400);
 
-    const result = await Like.deleteOne({
-      user: auth.userId,
-      post: postId,
-    });
+    const previous = await Like.findOneAndUpdate(
+      { user: auth.userId, post: postId, isDeleted: { $ne: true } },
+      { $set: { isDeleted: true, deletedAt: new Date() } },
+      { new: false }
+    );
 
-    if (result.deletedCount) {
+    if (previous) {
       await Post.updateOne(
-        { _id: postId, likesCount: { $gt: 0 } },
-        { $inc: { likesCount: -1 } }
+        { _id: postId },
+        [
+          {
+            $set: {
+              likesCount: {
+                $max: [
+                  0,
+                  { $subtract: [{ $ifNull: ["$likesCount", 0] }, 1] },
+                ],
+              },
+            },
+          },
+        ],
+        { updatePipeline: true }
       );
     }
 
-    return success({ liked: false });
+    const likesCount = await Like.countDocuments({
+      post: postId,
+      isDeleted: { $ne: true },
+    });
+
+    return success({ liked: false, changed: Boolean(previous), likesCount });
   } catch (error) {
     return handleRouteError(error);
   }

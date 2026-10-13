@@ -18,6 +18,7 @@ export async function GET(request) {
     const filter = {
       following: auth.userId,
       status: "pending",
+      isDeleted: { $ne: true },
     };
 
     const [requests, total] = await Promise.all([

@@ -21,27 +21,42 @@ export async function POST(request, { params }) {
 
     const status = target.isPrivate ? "pending" : "accepted";
 
-    let relationship = await Follow.findOne({
+    const alreadyAccepted = await Follow.exists({
       follower: auth.userId,
       following: userId,
+      status: "accepted",
+      isDeleted: { $ne: true },
     });
 
-    if (relationship?.status === "accepted") {
+    if (alreadyAccepted) {
       return success({ status: "accepted", message: "Already following" });
     }
 
-    if (relationship) {
-      relationship.status = status;
-      await relationship.save();
-    } else {
-      relationship = await Follow.create({
-        follower: auth.userId,
-        following: userId,
-        status,
+    const followFilter = { follower: auth.userId, following: userId };
+    const activateFollow = {
+      $set: { status, isDeleted: false, deletedAt: null },
+      $setOnInsert: { follower: auth.userId, following: userId },
+    };
+    let previous;
+    try {
+      previous = await Follow.findOneAndUpdate(followFilter, activateFollow, {
+        upsert: true,
+        new: false,
+      });
+    } catch (error) {
+      if (error?.code !== 11000) throw error;
+      previous = await Follow.findOneAndUpdate(followFilter, activateFollow, {
+        new: false,
       });
     }
+    const transitionedToAccepted = status === "accepted" &&
+      (!previous || previous.isDeleted === true || previous.status !== "accepted");
+    const createdPendingRequest = status === "pending" &&
+      (!previous || previous.isDeleted === true || previous.status !== "pending");
+    const relationshipId = previous?._id ||
+      (await Follow.findOne({ follower: auth.userId, following: userId }))._id;
 
-    if (status === "accepted") {
+    if (transitionedToAccepted) {
       await Promise.all([
         User.updateOne({ _id: auth.userId }, { $inc: { followingCount: 1 } }),
         User.updateOne({ _id: userId }, { $inc: { followersCount: 1 } }),
@@ -51,14 +66,14 @@ export async function POST(request, { params }) {
         recipient: userId,
         actor: auth.userId,
         type: "new_follower",
-        follow: relationship._id,
+        follow: relationshipId,
       });
-    } else {
+    } else if (createdPendingRequest) {
       await createNotification({
         recipient: userId,
         actor: auth.userId,
         type: "follow_request",
-        follow: relationship._id,
+        follow: relationshipId,
       });
     }
 
@@ -76,10 +91,15 @@ export async function DELETE(request, { params }) {
     const { userId } = await params;
     if (!validObjectId(userId)) return failure("Invalid user ID", 400);
 
-    const relationship = await Follow.findOneAndDelete({
-      follower: auth.userId,
-      following: userId,
-    });
+    const relationship = await Follow.findOneAndUpdate(
+      {
+        follower: auth.userId,
+        following: userId,
+        isDeleted: { $ne: true },
+      },
+      { $set: { isDeleted: true, deletedAt: new Date() } },
+      { new: false }
+    );
 
     if (!relationship) {
       return success({ message: "Relationship already removed" });
@@ -88,11 +108,11 @@ export async function DELETE(request, { params }) {
     if (relationship.status === "accepted") {
       await Promise.all([
         User.updateOne(
-          { _id: auth.userId, followingCount: { $gt: 0 } },
+          { _id: auth.userId },
           { $inc: { followingCount: -1 } }
         ),
         User.updateOne(
-          { _id: userId, followersCount: { $gt: 0 } },
+          { _id: userId },
           { $inc: { followersCount: -1 } }
         ),
       ]);
