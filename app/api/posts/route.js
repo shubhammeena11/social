@@ -10,7 +10,7 @@ import {
   failure,
   validationFailure,
 } from "@/lib/api-response";
-import { isValidOwnedMedia } from "@/lib/social";
+import { attachLikeState, isValidOwnedMedia } from "@/lib/social";
 
 // Create a post
 export async function POST(request) {
@@ -76,6 +76,7 @@ export async function GET(request) {
       Follow.find({
         follower: auth.userId,
         status: "accepted",
+        isDeleted: { $ne: true },
       }).distinct("following"),
 
       User.find({
@@ -103,9 +104,10 @@ export async function GET(request) {
 
       Post.countDocuments(filter),
     ]);
+    const postsWithLikeState = await attachLikeState(posts, auth.userId);
 
     return success({
-      posts,
+      posts: postsWithLikeState,
       page,
       limit,
       total,

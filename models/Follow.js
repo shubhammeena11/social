@@ -21,6 +21,16 @@ const followSchema = new mongoose.Schema(
       default: "pending",
       required: true,
     },
+
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

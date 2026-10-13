@@ -4,7 +4,7 @@ import User from "@/models/User";
 import { requireUser, handleRouteError, validObjectId } from "@/lib/route-utils";
 import { postSchema } from "@/lib/validators";
 import { success, failure, validationFailure } from "@/lib/api-response";
-import { getVisiblePost, isValidOwnedMedia } from "@/lib/social";
+import { attachLikeState, getVisiblePost, isValidOwnedMedia } from "@/lib/social";
 import cloudinary from "@/lib/cloudinary";
 
 export async function GET(request, { params }) {
@@ -19,8 +19,9 @@ export async function GET(request, { params }) {
 
     const post = await getVisiblePost(postId, viewerId);
     if (!post) return failure("Post not found", 404);
+    const [postWithLikeState] = await attachLikeState([post], viewerId);
 
-    return success({ post });
+    return success({ post: postWithLikeState });
   } catch (error) {
     return handleRouteError(error);
   }
@@ -78,7 +79,10 @@ export async function DELETE(request, { params }) {
     const Notification = (await import("@/models/Notification")).default;
 
     await Promise.all([
-      Like.deleteMany({ post: post._id }),
+      Like.updateMany(
+        { post: post._id, isDeleted: { $ne: true } },
+        { $set: { isDeleted: true, deletedAt: new Date() } }
+      ),
       Comment.deleteMany({ post: post._id }),
       Notification.deleteMany({ post: post._id }),
       User.updateOne(

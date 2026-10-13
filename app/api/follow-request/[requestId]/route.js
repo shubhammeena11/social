@@ -17,25 +17,22 @@ export async function PATCH(request, { params }) {
     const parsed = followRequestActionSchema.safeParse(await request.json());
     if (!parsed.success) return validationFailure(parsed.error);
 
-    const relationship = await Follow.findOne({
+    const relationship = await Follow.findOneAndUpdate({
       _id: requestId,
       following: auth.userId,
       status: "pending",
-    });
+      isDeleted: { $ne: true },
+    }, {
+      $set: { status: parsed.data.action === "reject" ? "rejected" : "accepted" },
+    }, { new: false });
 
     if (!relationship) {
       return failure("Pending request not found", 404);
     }
 
     if (parsed.data.action === "reject") {
-      relationship.status = "rejected";
-      await relationship.save();
-
       return success({ status: "rejected" });
     }
-
-    relationship.status = "accepted";
-    await relationship.save();
 
     await Promise.all([
       User.updateOne(
