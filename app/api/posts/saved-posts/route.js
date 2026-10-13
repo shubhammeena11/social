@@ -2,7 +2,7 @@ import SavedPost from "@/models/SavedPost";
 import { connectDB } from "@/lib/mongodb";
 import { requireUser, handleRouteError } from "@/lib/route-utils";
 import { success } from "@/lib/api-response";
-import { attachLikeState } from "@/lib/social";
+import { attachLikeState, canViewPost } from "@/lib/social";
 
 export async function GET() {
 try {
@@ -27,7 +27,10 @@ const savedPosts = await SavedPost.find({
 const posts = savedPosts
   .filter((item) => item.post != null)
   .map((item) => item.post);
-const postsWithLikeState = await attachLikeState(posts, auth.userId);
+const visiblePosts = await Promise.all(
+  posts.map(async (post) => (await canViewPost(auth.userId, post) ? post : null))
+);
+const postsWithLikeState = await attachLikeState(visiblePosts.filter(Boolean), auth.userId);
 
 return success({
   posts: postsWithLikeState,

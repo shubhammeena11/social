@@ -3,33 +3,33 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
-import { useRouter } from 'next/navigation';
-import { Bell, Bookmark, Home, LogOut, PlusSquare, Search, User } from 'lucide-react';
-import { fetchMe, logoutUser } from '@/store/authSlice';
+import { Bell, Bookmark, Compass, Home, PlusSquare, Search, Settings } from 'lucide-react';
+import { fetchMe } from '@/store/authSlice';
 import Sidebar from './Sidebar';
 import UserAvatar from './UserAvatar';
 
 const mobileNav = [
   { href: '/feed', label: 'Home', icon: Home },
-  { href: '/explore', label: 'Explore', icon: Search },
+  { href: '/explore', label: 'Explore', icon: Compass },
+  { href: '/search', label: 'Search', icon: Search },
   { href: '/create', label: 'Create', icon: PlusSquare },
   { href: '/notifications', label: 'Alerts', icon: Bell },
   { href: '/saved', label: 'Saved', icon: Bookmark },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function AppShell({ children }) {
   const dispatch = useDispatch();
-  const router = useRouter();
   const user = useSelector((state) => state.auth.user);
 
   useEffect(() => {
     dispatch(fetchMe());
   }, [dispatch]);
 
-  const handleLogout = async () => {
-    await dispatch(logoutUser());
-    router.push('/login');
-  };
+  useEffect(() => {
+    const theme = window.localStorage.getItem('social-theme') === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = theme;
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -45,15 +45,9 @@ export default function AppShell({ children }) {
 
               <div className="flex items-center gap-2">
                 {user ? (
-                  <>
-                    <Link href={`/profile/${user.username}`} className="hidden md:block">
-                      <UserAvatar user={user} size="sm" />
-                    </Link>
-                    <button onClick={handleLogout} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                      <LogOut size={16} />
-                      <span className="hidden sm:inline">Logout</span>
-                    </button>
-                  </>
+                  <Link href={`/profile/${user.username}`} className="hidden md:block">
+                    <UserAvatar user={user} size="sm" />
+                  </Link>
                 ) : (
                   <Link href="/login" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white">Login</Link>
                 )}
@@ -66,12 +60,12 @@ export default function AppShell({ children }) {
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/90 px-2 py-2 backdrop-blur xl:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-5 gap-2">
+        <div className="mx-auto grid max-w-lg grid-cols-7 gap-0">
           {mobileNav.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className="flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-medium text-slate-600"
+              className="flex flex-col items-center gap-1 rounded-xl px-0 py-2 text-[9px] font-medium text-slate-600"
             >
               <Icon size={18} />
               {label}

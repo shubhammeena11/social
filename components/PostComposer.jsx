@@ -1,16 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, extractApiData } from '@/lib/api/client';
 import PostMedia from './PostMedia';
 
 export default function PostComposer({ onPosted }) {
   const [caption, setCaption] = useState('');
   const [commentsEnabled, setCommentsEnabled] = useState(true);
+  const [audienceSettings, setAudienceSettings] = useState({ postVisibility: 'everyone', postAudience: [] });
+  const [audienceReady, setAudienceReady] = useState(false);
+  const [audienceError, setAudienceError] = useState('');
   const [media, setMedia] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    api.get('/api/settings')
+      .then((response) => {
+        if (active) setAudienceSettings(extractApiData(response)?.settings || { postVisibility: 'everyone', postAudience: [] });
+      })
+      .catch((settingsError) => {
+        if (active) setAudienceError(settingsError.message || 'Could not load post audience settings.');
+      })
+      .finally(() => {
+        if (active) setAudienceReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const uploadFile = async (file) => {
     const resourceType = file.type.startsWith('video/') ? 'video' : 'image';
@@ -95,6 +116,7 @@ export default function PostComposer({ onPosted }) {
     <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 text-lg font-semibold text-slate-900">Create a post</div>
       {error ? <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+      {audienceError ? <div role="alert" className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{audienceError}</div> : null}
 
       <textarea
         rows={4}
@@ -137,9 +159,13 @@ export default function PostComposer({ onPosted }) {
         </label>
       </div>
 
+      <p className="mt-3 text-xs text-slate-500">
+        Audience: {audienceSettings.postVisibility === 'everyone' ? 'Everyone' : audienceSettings.postVisibility === 'followers' ? 'Followers' : `Selected followers (${audienceSettings.postAudience.length})`}
+      </p>
+
       <button
         onClick={handleSubmit}
-        disabled={submitting || uploading}
+        disabled={submitting || uploading || !audienceReady || Boolean(audienceError)}
         className="mt-4 w-full rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting ? 'Publishing...' : 'Publish post'}

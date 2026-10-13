@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, extractApiData } from '@/lib/api/client';
 import UserAvatar from './UserAvatar';
-import { Send, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Send } from 'lucide-react';
+import ConfirmDialog from './ConfirmDialog';
 
 function formatCommentDate(value) {
   if (!value) return '';
@@ -19,6 +20,9 @@ export default function CommentThread({ postId, commentsEnabled, currentUser }) 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [openMenu, setOpenMenu] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deletingComment, setDeletingComment] = useState(false);
 
   const loadComments = useCallback(async () => {
     try {
@@ -56,13 +60,17 @@ export default function CommentThread({ postId, commentsEnabled, currentUser }) 
   };
 
   const handleDelete = async (commentId) => {
+    setDeletingComment(true);
     try {
       await api.delete(`/api/comment/${commentId}`);
       setError('');
+      setPendingDelete(null);
       await loadComments();
     } catch (error) {
       console.error(error);
       setError(error.message || 'Could not delete the comment.');
+    } finally {
+      setDeletingComment(false);
     }
   };
 
@@ -118,22 +126,40 @@ export default function CommentThread({ postId, commentsEnabled, currentUser }) 
           <div className="py-4 text-sm text-slate-500">Loading comments...</div>
         ) : comments.length ? (
           comments.map((comment) => (
-            <article key={comment._id} className="flex gap-3 py-4">
+            <article key={comment._id} className="relative flex gap-3 py-4">
               <UserAvatar user={comment.author} size="sm" />
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="truncate text-sm font-semibold text-slate-900">{comment.author?.username ? `@${comment.author.username}` : comment.author?.name || 'User'}</div>
                   <time dateTime={comment.createdAt} className="shrink-0 text-xs text-slate-400">{formatCommentDate(comment.createdAt)}</time>
                   {currentUser && (String(comment.author?._id || comment.author?.id) === String(currentUser.id || currentUser._id)) ? (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(comment._id)}
-                      aria-label="Delete comment"
-                      title="Delete comment"
-                      className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div className="relative ml-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setOpenMenu((current) => current === comment._id ? null : comment._id)}
+                        aria-label="Comment options"
+                        aria-expanded={openMenu === comment._id}
+                        title="Comment options"
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100"
+                      >
+                        <MoreHorizontal size={17} />
+                      </button>
+                      {openMenu === comment._id ? (
+                        <div className="absolute right-0 top-9 z-20 w-40 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenMenu(null);
+                              setError('');
+                              setPendingDelete(comment._id);
+                            }}
+                            className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50"
+                          >
+                            Delete comment
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
                 <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{comment.text}</p>
@@ -144,6 +170,16 @@ export default function CommentThread({ postId, commentsEnabled, currentUser }) 
           <p className="py-5 text-sm text-slate-500">No comments yet. Start the conversation.</p>
         )}
       </div>
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="Delete this comment?"
+          description="This comment and its direct replies will be removed. This action cannot be undone."
+          error={error}
+          busy={deletingComment}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => handleDelete(pendingDelete)}
+        />
+      ) : null}
     </section>
   );
 }

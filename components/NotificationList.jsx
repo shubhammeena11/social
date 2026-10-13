@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 
 function formatRelativeDate(dateString) {
@@ -21,6 +22,18 @@ export default function NotificationList({ notifications, onRefresh }) {
     setMarking(true);
     try {
       await api.patch(`/api/notifications/${notificationId}`, { isRead });
+      onRefresh?.();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  const deleteNotification = async (notificationId) => {
+    setMarking(true);
+    try {
+      await api.delete(`/api/notifications/${notificationId}`);
       onRefresh?.();
     } catch (error) {
       console.error(error);
@@ -57,13 +70,27 @@ export default function NotificationList({ notifications, onRefresh }) {
                 <div className="mt-1 text-xs text-slate-500">{formatRelativeDate(notification.createdAt)}</div>
               </div>
 
-              <button
-                onClick={() => markRead(notification._id, !notification.isRead)}
-                disabled={marking}
-                className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] uppercase tracking-wide text-slate-600"
-              >
-                {notification.isRead ? 'Unread' : 'Mark read'}
-              </button>
+              {notification.isRead ? (
+                <button
+                  type="button"
+                  onClick={() => deleteNotification(notification._id)}
+                  disabled={marking}
+                  aria-label="Delete notification"
+                  title="Delete notification"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+                >
+                  <Trash2 size={16} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => markRead(notification._id, true)}
+                  disabled={marking}
+                  className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] uppercase tracking-wide text-slate-600"
+                >
+                  Mark read
+                </button>
+              )}
             </div>
           </div>
         );

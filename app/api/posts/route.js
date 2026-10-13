@@ -34,8 +34,24 @@ export async function POST(request) {
       return failure("Invalid or unowned media asset", 400);
     }
 
+    const author = await User.findById(auth.userId).select("postVisibility postAudience");
+    if (!author) return failure("User not found", 404);
+
+    const visibility = author.postVisibility || "everyone";
+    let audience = [];
+    if (visibility === "custom" && author.postAudience.length) {
+      audience = await Follow.find({
+        follower: { $in: author.postAudience },
+        following: auth.userId,
+        status: "accepted",
+        isDeleted: { $ne: true },
+      }).distinct("follower");
+    }
+
     const post = await Post.create({
       ...parsed.data,
+      visibility,
+      audience,
       author: auth.userId,
     });
 
@@ -93,6 +109,13 @@ export async function GET(request) {
 
     const filter = {
       author: { $in: authorIds },
+      $or: [
+        { visibility: "everyone" },
+        { visibility: { $exists: false } },
+        { author: auth.userId },
+        { visibility: "followers", author: { $in: followedIds } },
+        { visibility: "custom", author: { $in: followedIds }, audience: auth.userId },
+      ],
     };
 
     const [posts, total] = await Promise.all([

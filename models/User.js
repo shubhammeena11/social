@@ -54,6 +54,17 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
+    postVisibility: {
+      type: String,
+      enum: ["everyone", "followers", "custom"],
+      default: "everyone",
+    },
+
+    postAudience: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
+
     role: {
       type: String,
       enum: ["user", "admin"],
@@ -84,7 +95,15 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ username: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true });
 
-const User =
-  mongoose.models.User || mongoose.model("User", userSchema);
+const existingUserModel = mongoose.models.User;
+if (
+  process.env.NODE_ENV !== "production" &&
+  existingUserModel &&
+  !existingUserModel.schema.path("postVisibility")
+) {
+  mongoose.deleteModel("User");
+}
+
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export default User;
